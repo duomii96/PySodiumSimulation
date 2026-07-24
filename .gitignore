@@ -1,0 +1,10 @@
+# Only ignore virtual environments and Python cache files
+.venv/
+venv/
+__pycache__/
+*.pyc
+.idea/
+.vscode/
+
+# Ignore heavy data/dictionary files
+*.h5

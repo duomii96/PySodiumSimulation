@@ -8,3 +8,5 @@ __pycache__/
 
 # Ignore heavy data/dictionary files
 *.h5
+*.png
+/Simulation_Results/

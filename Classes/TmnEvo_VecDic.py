@@ -419,10 +419,7 @@ class TmnEvoVecDic:
         return self.relax_T11_cached(c)
 
     def relax_fid_cached(self, c):
-        """T_{1,-1} FID channel — mirrors relax_T11 but for q=-1."""
-        # For API completeness; uses T1m1 channel
-        T11 = self.relax_T11_cached(c)
-        return T11   # caller can conjugate if needed
+        return self.relax_T1m1_cached(c)
 
     # ------------------------------------------------------------------
     # Accessor

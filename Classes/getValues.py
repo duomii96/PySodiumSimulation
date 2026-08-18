@@ -214,30 +214,35 @@ class getValues:
     @staticmethod
     def getRsJen(q, tauC, wQ, wQbar, Jen, wShiftRMS, w0):
         """Relaxation rates for Jen model (anisotropic environment)."""
-        J0, K0 = getValues.getJJen(0, tauC, wQ, Jen, w0)
-        J1, K1 = getValues.getJJen(1, tauC, wQ, Jen, w0)
-        J2, K2 = getValues.getJJen(2, tauC, wQ, Jen, w0)
+        J0, _ = getValues.getJJen(0, tauC, wQ, Jen, w0)
+        J1, _ = getValues.getJJen(1, tauC, wQ, Jen, w0)
+        J2, _ = getValues.getJJen(2, tauC, wQ, Jen, w0)
+
         q = abs(q)
+        shift = q * wShiftRMS
+
         if q == 0:
             R01 = 2 * J1
             R02 = 2 * J2
             R03 = 2 * J1 + 2 * J2
-            Rs = np.array([R01, R02, R03])
-        elif q == 1 or q == -1:
-            R11 = J0 + J1 + J2 - np.sqrt(np.maximum(J2**2 - wQbar**2, 0)) + abs(q) * wShiftRMS
-            R12 = J1 + J2 + abs(q) * wShiftRMS
-            R13 = J0 + J1 + J2 + np.sqrt(np.maximum(J2**2 - wQbar**2, 0)) + abs(q) * wShiftRMS
-            Rs = np.array([R11, R12, R13])
-        elif q == 2 or q == -2:
-            R21 = J0 + J1 + J2 + np.sqrt(np.maximum(J1**2 - wQbar**2, 0)) + abs(q) * wShiftRMS
-            R22 = J0 + J1 + J2 - np.sqrt(np.maximum(J1**2 - wQbar**2, 0)) + abs(q) * wShiftRMS
-            Rs = np.array([R21, R22])
-        elif q == 3 or q == -3:
-            R31 = J1 + J2 + abs(q) * wShiftRMS
-            Rs = np.array([R31])
-        else:
-            raise ValueError(f"Unsupported coherence order q={q}")
-        return Rs
+            return np.array([R01, R02, R03])
+
+        elif q == 1:
+            R11 = J0 + J1 + J2 - np.sqrt(np.maximum(J2 ** 2 - wQbar ** 2, 0)) + shift
+            R12 = J1 + J2 + shift
+            R13 = J0 + J1 + J2 + np.sqrt(np.maximum(J2 ** 2 - wQbar ** 2, 0)) + shift
+            return np.array([R11, R12, R13])
+
+        elif q == 2:
+            R21 = J0 + J1 + J2 + np.sqrt(np.maximum(J1 ** 2 - wQbar ** 2, 0)) + shift
+            R22 = J0 + J1 + J2 - np.sqrt(np.maximum(J1 ** 2 - wQbar ** 2, 0)) + shift
+            return np.array([R21, R22])
+
+        elif q == 3:
+            R31 = J1 + J2 + shift
+            return np.array([R31])
+
+        raise ValueError(f"Unsupported coherence order q={q}")
 
     @staticmethod
     def getRs(q, tauC, wQ, w0):
@@ -509,41 +514,66 @@ class getValues:
     @staticmethod
     def getfJen(q, t, tauC, wQ, wQbar, Jen, wShiftRMS, w0):
         """Relaxation functions for Jen model (anisotropic)."""
-        J0, K0 = getValues.getJJen(0, tauC, wQ, Jen, w0)
-        J1, K1 = getValues.getJJen(1, tauC, wQ, Jen, w0)
-        J2, K2 = getValues.getJJen(2, tauC, wQ, Jen, w0)
+        J0, _ = getValues.getJJen(0, tauC, wQ, Jen, w0)
+        J1, _ = getValues.getJJen(1, tauC, wQ, Jen, w0)
+        J2, _ = getValues.getJJen(2, tauC, wQ, Jen, w0)
         Rs = getValues.getRsJen(q, tauC, wQ, wQbar, Jen, wShiftRMS, w0)
+
         sign_q = np.sign(q) if q != 0 else 1
         q_abs = abs(q)
+
         if q_abs == 0:
             R01, R02, R03 = Rs
-            f011 = (1/5) * (np.exp(-R01*t) + 4*np.exp(-R02*t))
-            f013 = (2/5) * (np.exp(-R01*t) - np.exp(-R02*t))
-            f033 = (1/5) * (4*np.exp(-R01*t) + np.exp(-R02*t))
-            f022 = np.exp(-R03*t)
+            f011 = (1 / 5) * (np.exp(-R01 * t) + 4 * np.exp(-R02 * t))
+            f013 = (2 / 5) * (np.exp(-R01 * t) - np.exp(-R02 * t))
+            f033 = (1 / 5) * (4 * np.exp(-R01 * t) + np.exp(-R02 * t))
+            f022 = np.exp(-R03 * t)
             return f011, f013, f033, f022
+
         elif q_abs == 1:
             R11, R12, R13 = Rs
-            mu = J2 / np.sqrt(np.maximum(J2**2 - wQbar**2, 1e-100))
-            v  = wQbar / np.sqrt(np.maximum(J2**2 - wQbar**2, 1e-100))
-            f111 = (1/5)*((3/2*(1+mu))*np.exp(-R11*t) + 2*np.exp(-R12*t) + (3/2*(1-mu))*np.exp(-R13*t))
-            f122 = (1/2)*((1-mu)*np.exp(-R11*t) + (1+mu)*np.exp(-R13*t))
-            f133 = (1/5)*((1+mu)*np.exp(-R11*t) + 3*np.exp(-R12*t) + (1-mu)*np.exp(-R11*t))
-            f113 = (np.sqrt(6)/5)*((1/2*(1+mu))*np.exp(-R11*t) - np.exp(-R12*t) + (1/2*(1-mu))*np.exp(-R13*t))
-            f112 = (1j/2)*np.sqrt(3/5)*v*(sign_q*np.exp(-R11*t) - sign_q*np.exp(-R13*t))
-            f123 = (1j / np.sqrt(10)) * v *(sign_q*np.exp(-R11*t) - sign_q*np.exp(-R13*t))
+            mu = J2 / np.sqrt(np.maximum(J2 ** 2 - wQbar ** 2, 1e-100))
+            v = wQbar / np.sqrt(np.maximum(J2 ** 2 - wQbar ** 2, 1e-100))
+
+            f111 = (1 / 5) * (
+                    (3 / 2) * (1 + mu) * np.exp(-R11 * t)
+                    + 2 * np.exp(-R12 * t)
+                    + (3 / 2) * (1 - mu) * np.exp(-R13 * t)
+            )
+            f122 = (1 / 2) * ((1 - mu) * np.exp(-R11 * t) + (1 + mu) * np.exp(-R13 * t))
+            f133 = (1 / 5) * (
+                    (1 + mu) * np.exp(-R11 * t)
+                    + 3 * np.exp(-R12 * t)
+                    + (1 - mu) * np.exp(-R13 * t)
+            )
+            f113 = (np.sqrt(6) / 5) * (
+                    (1 / 2) * (1 + mu) * np.exp(-R11 * t)
+                    - np.exp(-R12 * t)
+                    + (1 / 2) * (1 - mu) * np.exp(-R13 * t)
+            )
+            f112 = (1j / 2) * np.sqrt(3 / 5) * v * (
+                    sign_q * np.exp(-R11 * t) - sign_q * np.exp(-R13 * t)
+            )
+            f123 = (1j / np.sqrt(10)) * v * (
+                    sign_q * np.exp(-R11 * t) - sign_q * np.exp(-R13 * t)
+            )
             return f111, f113, f133, f112, f123, f122
+
         elif q_abs == 2:
             R21, R22 = Rs
-            mu = J1 / np.sqrt(np.maximum(J1**2 - wQbar**2, 1e-100))
-            v  = wQbar / np.sqrt(np.maximum(J1**2 - wQbar**2, 1e-100))
-            f222 = (1/2)*((1+mu)*np.exp(-R21*t) + (1-mu)*np.exp(-R22*t))
-            f233 = (1/2)*((1+mu)*np.exp(-R21*t) + (1-mu)*np.exp(-R22*t))
-            f223 = (-1j/2)*v*(sign_q*np.exp(-R21*t) - sign_q*np.exp(-R22*t))
+            mu = J1 / np.sqrt(np.maximum(J1 ** 2 - wQbar ** 2, 1e-100))
+            v = wQbar / np.sqrt(np.maximum(J1 ** 2 - wQbar ** 2, 1e-100))
+
+            f222 = (1 / 2) * ((1 + mu) * np.exp(-R21 * t) + (1 - mu) * np.exp(-R22 * t))
+            f233 = (1 / 2) * ((1 + mu) * np.exp(-R21 * t) + (1 - mu) * np.exp(-R22 * t))
+            f223 = (-1j / 2) * v * (
+                    sign_q * np.exp(-R21 * t) - sign_q * np.exp(-R22 * t)
+            )
             return f222, f233, f223
+
         elif q_abs == 3:
             R31 = Rs[0]
-            f333 = np.exp(-R31*t)
+            f333 = np.exp(-R31 * t)
             return (f333,)
 
     # -------------------------------------------------------------------------

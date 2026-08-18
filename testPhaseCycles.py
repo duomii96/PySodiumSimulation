@@ -5,6 +5,9 @@ import time
 from commonImports import *
 from diagnoseCheck import diagnose_sequence_with180
 from Classes.getFunction import getFunction
+from DataLoadingStoring.NEOreadIn import NEOreadInSE
+from Classes.spectralSampling import sampler_from_fid
+from sampleParams import SAMPLES
 
 def diagnose_sequence_with_relax(B0, tauC, wQ, wQbar, Jen,
                                   flip90=90.0, alpha=0.0,
@@ -118,34 +121,36 @@ def diagnose_sequence_with_relax(B0, tauC, wQ, wQbar, Jen,
 B0 = 9.4
 w0 = getValues.getw0(B0)
 
+_sampleFWHMfromSP = True
 
-"""T1s =  46.18000934e-3
-T1f =  36.22039465e-3
-T2s =  32.57286305e-3
-T2f =   3.657434931e-3"""
-# Agar 6%
-T1s = 39.129e-3
-T1f = 27.6504e-3
-T2s = 32.3578e-3
-T2f = 3.9326e-3
-# agar 4%
-"""T1s =  41.38000934e-3
-T1f =  33.62039465e-3
-T2s =  37.22286305e-3
-T2f =   5.127434931e-3"""
-# Relaxationrates 2% @ 9.4T FHWM: 47
-"""T1s =  46.65000934e-3
-T1f =  41.92039465e-3
-T2s =  43.35286305e-3
-T2f =   9.137434931e-3"""
-
-
-
-
-
-FWHM = 50
+T1s, T1f, T2s, T2f = SAMPLES["Agar6_alt"]
 
 Jen, tauC, wQ, wShiftRMS = getValues.getJenModel(T1f, T1s, T2f, T2s, w0)
+PC = PhaseCyclesVecDic(B0, tauC, wQ, wQbar=0.0, Jen=Jen, wShift=0.0, wShiftRMS=wShiftRMS)
+
+
+
+
+if _sampleFWHMfromSP:
+    complexData, method, _ = NEOreadInSE(r"C:\Users\dz8\Data\Messdaten\DZ_Agar6_newReco_1_106_20250609_125343\68")
+    FIDGibbs_reduced = np.squeeze(complexData)[77:]
+    dt = 0.1e-03 # dwell time in seconds
+    sampler = sampler_from_fid(FIDGibbs_reduced, dt, bin_size=1, freq_range=(-500, 500), to_angular=False)
+
+    centers, weights = sampler.pdf_table()
+    print("Peak bin:", centers[np.argmax(weights)])
+    print("Mean (Hz):", np.sum(centers * weights))
+
+
+
+
+
+    PC.wShiftdist = sampler
+
+else:
+    FWHM = 50
+    PC.wShiftdist = getValues.getWshiftDist('cauchy', 0, FWHM / 2)
+
 
 #st1, st2 = diagnose_sequence_with180(B0=B0, tauC=tauC, wQ=wQ, wQbar=0, Jen=Jen,
 #    flip90=90.0, flip180=180,alpha=45, tevo=30e-3, tmix=0.15e-3)
@@ -157,13 +162,13 @@ T1s_r, T1f_r, T2s_r, T2f_r = getValues.getrelaxationTimesJen(
 print(f"Input:     T2f={T2f*1e3:.2f} ms,  T2s={T2s*1e3:.1f} ms")
 print(f"Recovered: T2f={T2f_r*1e3:.2f} ms, T2s={T2s_r*1e3:.1f} ms")"""
 
-PC = PhaseCyclesVecDic(B0, tauC, wQ, 0.0, Jen, 0.0, 0.0, 0.0)
+
 PC.dwelltimeFID   = 100e-6
 PC.dataPoints     = 2048
 PC.NumPhaseCycles = 16
 PC.nSpins         = 1000
 PC.tmix           = 0.15e-3
-PC.wShiftdist     = getValues.getWshiftDist('cauchy', 0, FWHM/2)
+#PC.wShiftdist     = getValues.getWshiftDist('cauchy', 0, FWHM/2)
 #PC.wShiftdist     = getValues.getWshiftDist('normal', 0, FWHM/2)
 #PC.wShiftdist     = getValues.getWshiftDist("voigt", cen=0.0, sig=FWHM/2, eta=0.7)
 PC.flip90         = 90.0
@@ -206,7 +211,7 @@ if newReco:
     plt.show()
 elif newReco == False and singlePulse ==True:
 
-    #times, FID, TQ, SQ = PC.SinglePulseVec()
+    times, FID, TQ, SQ = PC.SinglePulseVec()
     imgFID = imag(FIDs)
     FID = real(FIDs)
 

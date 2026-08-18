@@ -49,78 +49,8 @@ class getFunction:
                     1 - 2 * (A1s * np.exp(-t / T1s) + A1f * np.exp(-t / T1f))) + Atq * np.sin(
             3 * 2 * np.pi * omega * t + ph2) * (np.exp(-t / T1s) - np.exp(-t / T1f)) + C
 
-    def fit_biexponentialSQ(t, y, p0=None, bounds=None, plot=False, singleAmp=False):
-        t = np.asarray(t, dtype=float)
-        y = np.asarray(y, dtype=float)
-
-        #check if data is normalized
-        if np.amax(y) >1:
-            y /= np.amax(y)
-
-        if p0 is None:
-            span = t.ptp() if t.ptp() > 0 else 1.0
-            offset = y[-1]
-            amp = y[0] - offset
-            p0 = (span / 5, span / 2, 0.6 * amp, 0.4 * amp, offset)
-
-        if bounds is None and not(singleAmp):
-            bounds = (
-                [0, 0, 0, 0, -0.1],
-                [0.07, 0.070, 1, 1, 0.1]
-            )
-            popt, pcov = curve_fit(getFunction.getFunc_biexp, t, y, p0=p0, bounds=bounds, maxfev=20000)
-
-            plt.figure(figsize=(9, 16), dpi=200)
-            plt.plot(t, y, '<-', label="Data")
-            plt.plot(t, getFunction.getFunc_biexp(t, *popt))
-            plt.grid(True)
-            plt.xlabel("Time (s)")
-            plt.show()
-        elif bounds is None and singleAmp:
-            bounds = (
-                [0, 0, 0, -0.1],
-                [0.07, 0.070,  1, 0.1]
-            )
-            popt, pcov = curve_fit(getFunction.getFunc_biexp_oneAmp, t, y, p0=p0, bounds=bounds, maxfev=20000)
-            plt.figure(figsize=(9, 16), dpi=200)
-            plt.plot(t, y, '<-', label="Data")
-            plt.plot(t, getFunction.getFunc_biexp_oneAmp(t, *popt))
-            plt.grid(True)
-            plt.xlabel("Time (s)")
-            plt.show()
-        else:
-            # bounds are specified // 4 par fit
-            popt, pcov = curve_fit(getFunction.getFunc_biexp_oneAmp, t, y, p0=p0, bounds=bounds, maxfev=20000)
-            plt.figure(figsize=(9, 16), dpi=200)
-            plt.plot(t, y, '<-', label="Data")
-            plt.plot(t, getFunction.getFunc_biexp_oneAmp(t, *popt))
-            plt.grid(True)
-            plt.xlabel("Time (s)")
-            plt.show()
-
-
-
-
-
-
-
-        return popt, pcov
-
-    def fit_TQTTPI_FID(t, y, p0=None, bounds=None):
-        t = np.asarray(t, dtype=float)
-        y = np.asarray(y, dtype=float)
-
-        if bounds is None:
-            bounds = (
-                [0, 0, 0, 0, 0, 0, -2 * np.pi, -2 * np.pi, -0.1],
-                [0.070, 0.050, 1, 1, 1, 1e5, 3 * np.pi, 3 * np.pi, 0.1]
-            )
-
-        popt, pcov = curve_fit(getFunction.getFunc_TQTPPI_FID, t, y, p0=p0, bounds=bounds, maxfev=20000)
-
-        return popt, pcov
-
-    def fit_IRTQTTPI_FID(t, y, p0=None, fixAmp=True, bounds=None):
+    @staticmethod
+    def fit_IRTQTPPI_FID(t, y, p0=None, fixAmp=True, bounds=None):
         t = np.asarray(t, dtype=float)
         y = np.asarray(y, dtype=float)
 
@@ -142,3 +72,74 @@ class getFunction:
         popt, pcov = curve_fit(getFunction.getFunc_IRTQTPPI_FID, t, y, p0=p0, bounds=bounds, maxfev=20000)
 
         return popt, pcov
+
+    def fit_biexponentialSQ(t, y, p0=None, bounds=None, plot=False, singleAmp=False):
+        t = np.asarray(t, dtype=float)
+        y = np.asarray(y, dtype=float)
+
+        #check if data is normalized
+        if np.amax(y) >1:
+            y /= np.amax(y)
+
+        if p0 is None:
+
+            p0 = [0.030, 0.010, 0.4 , 0.6, 0]
+
+        if bounds is None and not(singleAmp):
+            bounds = (
+                [0, 0, 0, 0, -0.1],
+                [0.07, 0.070, 1, 1, 0.1]
+            )
+            popt, pcov = curve_fit(getFunction.getFunc_biexp, t, y, p0=p0, bounds=bounds, maxfev=20000)
+
+            plt.figure(figsize=(9, 5), dpi=200)
+            plt.plot(t, y, 'o-', label="Data")
+            plt.plot(t, getFunction.getFunc_biexp(t, *popt))
+            plt.grid(True)
+            plt.xlabel("Time (s)")
+            plt.show()
+        elif bounds is None and singleAmp:
+            bounds = (
+                [0, 0, 0, -0.1],
+                [0.07, 0.070,  1, 0.1]
+            )
+            popt, pcov = curve_fit(getFunction.getFunc_biexp_oneAmp, t, y, p0=p0, bounds=bounds, maxfev=20000)
+            plt.figure(figsize=(9, 5), dpi=200)
+            plt.plot(t, y, '<-', label="Data")
+            plt.plot(t, getFunction.getFunc_biexp_oneAmp(t, *popt))
+            plt.grid(True)
+            plt.xlabel("Time (s)")
+            plt.show()
+        else:
+            # bounds are specified // 4 par fit
+            popt, pcov = curve_fit(getFunction.getFunc_biexp_oneAmp, t, y, p0=p0, bounds=bounds, maxfev=20000)
+            plt.figure(figsize=(9, 5), dpi=200)
+            plt.plot(t, y, '<-', label="Data")
+            plt.plot(t, getFunction.getFunc_biexp_oneAmp(t, *popt))
+            plt.grid(True)
+            plt.xlabel("Time (s)")
+            plt.show()
+
+
+
+
+
+
+
+        return popt, pcov
+
+    def fit_TQTTPI_FID(t, y, p0=None, bounds=None):
+        t = np.asarray(t, dtype=float)
+        y = np.asarray(y, dtype=float)
+
+        if bounds is None:
+            bounds = (
+                [0, 0, 0, 0, 0, 0, -2 * np.pi, -2 * np.pi, -0.1],
+                [0.070, 0.050, 1.0 , 1.0, 1, 1e5, 3 * np.pi, 3 * np.pi, 0.1]
+            )
+
+        popt, pcov = curve_fit(getFunction.getFunc_TQTPPI_FID, t, y, p0=p0, bounds=bounds, maxfev=20000)
+
+        return popt, pcov
+
+

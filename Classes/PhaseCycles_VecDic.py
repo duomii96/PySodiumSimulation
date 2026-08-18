@@ -61,7 +61,7 @@ class PhaseCyclesVecDic:
     # ------------------------------------------------------------------
     # Single-pulse validation
     # ------------------------------------------------------------------
-    def SinglePulseVec(self):
+    def SinglePulse(self):
         times = self.deadtimeFID + self.TR * np.arange(self.dataPoints) / self.dataPoints
         wShiftvec = self.FreqShift + self.wShiftdist.rvs(self.nSpins)
         st = TmnEvoVecDic(self.B0, self.tauC, self.wQ, self.wQbar, self.Jen,
@@ -324,8 +324,8 @@ class PhaseCyclesVecDic:
                 stp2.pulsebatch(flip3vec, 0)
 
                 # ── Acquisition ───────────────────────────────────────────────────
-                FIDsbeta[idx, :, 0] = np.sum(stp1.relax_T11_cached(cffid_pf), axis=0)
-                FIDsbeta[idx, :, 1] = np.sum(stp2.relax_T11_cached(cffid_pf), axis=0)
+                FIDsbeta[idx, :, 0] = np.sum(stp1.relax_T1m1_cached(cffid_pf), axis=0)
+                FIDsbeta[idx, :, 1] = np.sum(stp2.relax_T1m1_cached(cffid_pf), axis=0)
 
                 if verbose and idx % 160 == 0:
                     print(f"  phase step {idx:3d}/{nFIDs}")
@@ -718,9 +718,9 @@ class PhaseCyclesVecDic:
         mqSpectrum = np.fft.fftshift(np.fft.fft(mqFID))
         return acqTimeVec, mqSpectrum, FIDs, fAngles90
 
-    def IRTQTPPI_sr(self):
+    def IRTQTPPI_sr(self, skip=True):
         """
-        Inversion-Recovery TQTPPI in the style of the current TQTPPI simulation.
+        Inversion-Recovery TQTPPI based on TQTPPI.
 
         Sequence per phase step:
             180(0) -> tevo -> 90(beta = alpha ± 135) -> tmix -> 90(0) -> acquire
@@ -758,9 +758,30 @@ class PhaseCyclesVecDic:
         cffid = warm.precompute_fJen(acqTimeVec)
 
         # ── tevo grid ──────────────────────────────────────────────────────────────
-        tevos = self.tevo0 + np.arange(nFIDs) * self.tevoStep
-        all_ts_evo = [np.linspace(0, t, self.nPtsevo) for t in tevos]
-        all_cf_evo = [warm.precompute_fJen(ts) for ts in all_ts_evo]
+        if skip:
+
+
+            x1 = np.arange(1,nFIDs*5+1)
+
+            # 2. Extract subsets and concatenate (MATLAB indexing is 1-based, Python is 0-based)
+            half_len = int(np.floor(nFIDs / 2))
+            # MATLAB x1(1:half_len) -> Python x1[0:half_len]
+            # MATLAB x1(half_len+9:9:end) -> Python x1[half_len+8::9] (8-based offset for 9th element due to 0-indexing)
+            x = np.concatenate([x1[0:half_len], x1[half_len + 8:: 9]])
+
+            # 3. Apply transformation similar to the MATLAB script
+            x = x.astype(float)  # Ensure float type for calculations if needed
+            x[0] = self.tevo0
+            x[1:] = (x[1:] - 1) * self.tevoStep + x[0]
+            tevos = x
+            all_ts_evo = [np.linspace(0, t, self.nPtsevo) for t in x]
+            all_cf_evo = [warm.precompute_fJen(ts) for ts in all_ts_evo]
+
+
+        else:
+            tevos = self.tevo0 + np.arange(nFIDs) * self.tevoStep
+            all_ts_evo = [np.linspace(0, t, self.nPtsevo) for t in tevos]
+            all_cf_evo = [warm.precompute_fJen(ts) for ts in all_ts_evo]
 
         # ── Reusable state objects ─────────────────────────────────────────────────
         stp1 = TmnEvoVecDic(

@@ -5,6 +5,7 @@ import time
 from commonImports import *
 from diagnoseCheck import diagnose_sequence_with180
 from Classes.getFunction import getFunction
+from sampleParams import SAMPLES
 
 
 
@@ -12,65 +13,7 @@ B0 = 9.4
 w0 = getValues.getw0(B0)
 
 
-T1s =  36.18000934e-3
-T1f =  26.22039465e-3
-T2s =  32.57286305e-3
-T2f =   3.657434931e-3
-# Agar 6%
-"""T1s = 39.129e-3
-T1f = 27.6504e-3
-T2s = 32.3578e-3
-T2f = 3.9326e-3"""
-# agar 4%
-"""T1s =  41.38000934e-3
-T1f =  33.62039465e-3
-T2s =  37.22286305e-3
-T2f =   5.127434931e-3"""
-# Relaxationrates 2% @ 9.4T FHWM: 47
-"""T1s =  46.65000934e-3
-T1f =  41.92039465e-3
-T2s =  43.35286305e-3
-T2f =   9.137434931e-3"""
-
-#----------- For Sim Paper TQTPPI and Inversion TQTPPI -----------
-#6% Agarose  FWHM: 47
-T1s =  39.079334e-3
-T1f =  27.22039465e-3 # T1f_8020
-T2s =  32.025e-3
-T2f =   4.1242e-3
-
-
-#4% Agarose  FWHM: 47
-T1s =  42.9525e-3
-T1f =  31.1021e-3 # T1f_8020
-T2s =  37.8604e-3
-T2f =   6.1239e-3
-
-#2% Agarose  FWHM: 47
-T1s =  49.1431e-3
-T1f =  35.1757e-3 # T1f_8020
-T2s =  43.3500e-3
-T2f =  10.2693e-3
-
-#----------- For Sim Paper Spin Echo SR-----------
-#6% Agarose  FWHM: 47
-T1s =  39.079334e-3
-T1f =  27.22039465e-3 # T1f_8020
-T2s =  32.025e-3
-T2f =   4.1242e-3
-
-
-#4% Agarose  FWHM: 47
-T1s =  42.9525e-3
-T1f =  31.1021e-3 # T1f_8020
-T2s =  37.8604e-3
-T2f =   6.1239e-3
-
-#2% Agarose  FWHM: 47
-T1s =  49.1431e-3
-T1f =  35.1757e-3 # T1f_8020
-T2s =  43.3500e-3
-T2f =  10.2693e-3
+T1f, T1s, T2f, T2s = SAMPLES["Agar2_sr"]
 
 
 

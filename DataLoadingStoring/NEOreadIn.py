@@ -1,7 +1,7 @@
 import numpy as np
 
 from commonImports import *
-import PythonBrukerReadIn as pbr
+from DataLoadingStoring import PythonBrukerReadIn as pbr
 from scipy.optimize import minimize
 import re
 
@@ -56,21 +56,26 @@ def NEOreadInSE(pathToData, job='job0'):
                 complexData = np.reshape(complexData, complexData.shape[-1] // specDim[0], specDim)
         else:
             print("Value not found")
-        
+        return complexData, method, acqp
+    elif "SP" in method["Method"]:
+
+        return complexData, method, acqp
+
     else:   
         try:
             if specDim.size != specDim1.size:
                 complexData = complexData[:specDim]
             elif specDim[0] != complexData.shape[-1] and specDim.size == specDim1.size:
                 complexData = np.reshape(complexData, (complexData.shape[-1] // specDim, specDim))
+            return complexData, method, acqp
         except:
             numEchoes = method['NumInvTime']
             complexData = np.reshape(complexData, (numEchoes, specDim[0]))
-    if method['Method'] == '<User:sr_SP>' and np.min(real(complexData)) < -1e6:
-        print("Data multiplied by -1 to switch it around")
-        complexData *= -1e0
+            return complexData, method, acqp
 
 
 
 
-    return complexData, method, acqp
+
+
+

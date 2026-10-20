@@ -407,33 +407,33 @@ class getValues:
     # -------------------------------------------------------------------------
     @staticmethod
     def gettauCwQ(T2f, T2s, w0):
-        """Calculate tauC and wQ from T2f and T2s (dk20)."""
+        """Calculate tauC and wQ from T2f and T2s (dk20).
+        Inverts T2s/T2f = (2+9x+4x^2)/(2+5x),  R11-R12 = J0-J2,  x = (w0*tauC)^2.
+        """
         R11 = 1.0 / np.atleast_1d(T2f)
         R12 = 1.0 / np.atleast_1d(T2s)
-        a1 = R11 * R12
+        a1 = R11 / R12                     # = T2s/T2f
         b1 = R11 - R12
-        b1[b1 == 0] = 0
-        a1[b1 == 0] = 0
-        tauC = np.real(1.0 / w0 * np.sqrt(
-            1.0 / 8 - 9/5 * a1 + np.sqrt((9/5 * a1)**2 - (5*8) * a1 + 49)
-        ))
-        x = (w0 * tauC) ** 2
-        wQ = np.sqrt(5 * b1 / (1 + 4*x) / (4*x) * tauC)
+        # 4x^2 + (9-5a1)x + (2-2a1) = 0  →  positive root
+        p = 9 - 5 * a1
+        x = (-p + np.sqrt(p**2 - 16 * (2 - 2 * a1))) / 8
+        tauC = np.sqrt(x) / w0
+        wQ = np.sqrt(5 * b1 * (1 + 4*x) / (4*x * tauC))
         wQ[np.isnan(wQ)] = 0
         return tauC, wQ
 
     @staticmethod
     def gettauCwQT1(T1f, T1s, w0):
-        """Calculate tauC and wQ from T1f and T1s (dk20)."""
+        """Calculate tauC and wQ from T1f and T1s (dk20).
+        Inverts T1s/T1f = (1+4x)/(1+x),  R01-R02 = 2J1-2J2,  x = (w0*tauC)^2.
+        """
         R01 = 1.0 / np.atleast_1d(T1f)
         R02 = 1.0 / np.atleast_1d(T1s)
-        a0 = R01 * R02
+        a0 = R01 / R02                     # = T1s/T1f, valid range [1, 4)
         b0 = R01 - R02
-        b0[b0 == 0] = 0
-        a0[b0 == 0] = 0
-        tauC = np.real(1.0 / w0 * np.sqrt((a0 - 1.0) / (4.0 - a0)))
-        x = (w0 * tauC) ** 2
-        wQ = np.sqrt(b0 * 6/5 * x * tauC / (4*x * (25*x + 1)))
+        x = (a0 - 1.0) / (4.0 - a0)
+        tauC = np.sqrt(x) / w0
+        wQ = np.sqrt(5 * b0 * (1 + x) * (1 + 4*x) / (6*x * tauC))
         wQ[np.isnan(wQ)] = 0
         return tauC, wQ
 
@@ -457,7 +457,7 @@ class getValues:
         elif q == 1:
             R11 = J0+J1; R12 = J1+J2; R13 = J0+J1+2*J2
             f111 = (1/5) * (3*np.exp(-R11*t) + 2*np.exp(-R12*t))
-            f113 = np.sqrt(6/5) * (np.exp(-R11*t) - np.exp(-R12*t))
+            f113 = (np.sqrt(6)/5) * (np.exp(-R11*t) - np.exp(-R12*t))
             f133 = (1/5) * (2*np.exp(-R11*t) + 3*np.exp(-R12*t))
             f122 = np.exp(-R13*t)
             return f111, f113, f133, f122
@@ -473,43 +473,10 @@ class getValues:
 
     @staticmethod
     def getfaniso(q, t, tauC, wQ, wQbar, w0):
-        """Relaxation functions for anisotropic environment."""
-        J0, _ = getValues.getJ(0, tauC, wQ, w0)
-        J1, _ = getValues.getJ(1, tauC, wQ, w0)
-        J2, _ = getValues.getJ(2, tauC, wQ, w0)
-        Rs = getValues.getRsaniso(q, tauC, wQ, wQbar, w0)
-        sign_q = np.sign(q) if q != 0 else 1
-        q = abs(q)
-        if q == 0:
-            R01, R02, R03 = Rs
-            f011 = (1/5) * (np.exp(-R01*t) + 4*np.exp(-R02*t))
-            f013 = (2/5) * (np.exp(-R01*t) - np.exp(-R02*t))
-            f033 = (1/5) * (4*np.exp(-R01*t) + np.exp(-R02*t))
-            f022 = np.exp(-R03*t)
-            return f011, f013, f033, f022
-        elif q == 1:
-            R11, R12, R13 = Rs
-            mu = J2 / np.sqrt(max(J2**2 - wQbar**2, 1e-100))
-            v  = wQbar / np.sqrt(max(J2**2 - wQbar**2, 1e-100))
-            f111 = (1/5) * ((3/2*(1+mu))*np.exp(-R11*t) + 2*np.exp(-R12*t) + (3/2*(1-mu))*np.exp(-R13*t))
-            f122 = (1/2) * ((1-mu)*np.exp(-R11*t) + (1+mu)*np.exp(-R13*t))
-            f133 = (1/5) * ((1+mu)*np.exp(-R11*t) + 3*np.exp(-R12*t) + (1-mu)*np.exp(-R13*t))  # approx
-            f113 = np.sqrt(6/5) * ((1/2*(1+mu))*np.exp(-R11*t) - np.exp(-R12*t) + (1/2*(1-mu))*np.exp(-R13*t))
-            f112 = (1j/2) * np.sqrt(3/5) * v * (sign_q*np.exp(-R11*t) - sign_q*np.exp(-R13*t))
-            f123 = (1j) * np.sqrt(10) * v * (sign_q*np.exp(-R11*t) - sign_q*np.exp(-R13*t))
-            return f111, f113, f133, f112, f123, f122
-        elif q == 2:
-            R21, R22 = Rs
-            mu = J1 / np.sqrt(max(J1**2 - wQbar**2, 1e-100))
-            v  = wQbar / np.sqrt(max(J1**2 - wQbar**2, 1e-100))
-            f222 = (1/2) * ((1+mu)*np.exp(-R21*t) + (1-mu)*np.exp(-R22*t))
-            f233 = (1/2) * ((1+mu)*np.exp(-R21*t) + (1-mu)*np.exp(-R22*t))
-            f223 = (-1j/2) * v * (sign_q*np.exp(-R21*t) - sign_q*np.exp(-R22*t))
-            return f222, f233, f223
-        elif q == 3:
-            R31 = Rs[0]
-            f333 = np.exp(-R31*t)
-            return (f333,)
+        """Relaxation functions for anisotropic environment.
+        Identical to the Jen model with Jen = 0 and wShiftRMS = 0.
+        """
+        return getValues.getfJen(q, t, tauC, wQ, wQbar, 0.0, 0.0, w0)
 
     @staticmethod
     def getfJen(q, t, tauC, wQ, wQbar, Jen, wShiftRMS, w0):
@@ -532,8 +499,11 @@ class getValues:
 
         elif q_abs == 1:
             R11, R12, R13 = Rs
-            mu = J2 / np.sqrt(np.maximum(J2 ** 2 - wQbar ** 2, 1e-100))
-            v = wQbar / np.sqrt(np.maximum(J2 ** 2 - wQbar ** 2, 1e-100))
+            if wQbar == 0:
+                mu, v = 1.0, 0.0   # isotropic limit; avoids 0/0 when J2 = 0 (wQ = 0)
+            else:
+                mu = J2 / np.sqrt(np.maximum(J2 ** 2 - wQbar ** 2, 1e-100))
+                v = wQbar / np.sqrt(np.maximum(J2 ** 2 - wQbar ** 2, 1e-100))
 
             f111 = (1 / 5) * (
                     (3 / 2) * (1 + mu) * np.exp(-R11 * t)
@@ -561,11 +531,14 @@ class getValues:
 
         elif q_abs == 2:
             R21, R22 = Rs
-            mu = J1 / np.sqrt(np.maximum(J1 ** 2 - wQbar ** 2, 1e-100))
-            v = wQbar / np.sqrt(np.maximum(J1 ** 2 - wQbar ** 2, 1e-100))
+            if wQbar == 0:
+                mu, v = 1.0, 0.0   # isotropic limit; avoids 0/0 when J1 = 0 (wQ = 0)
+            else:
+                mu = J1 / np.sqrt(np.maximum(J1 ** 2 - wQbar ** 2, 1e-100))
+                v = wQbar / np.sqrt(np.maximum(J1 ** 2 - wQbar ** 2, 1e-100))
 
             f222 = (1 / 2) * ((1 + mu) * np.exp(-R21 * t) + (1 - mu) * np.exp(-R22 * t))
-            f233 = (1 / 2) * ((1 + mu) * np.exp(-R21 * t) + (1 - mu) * np.exp(-R22 * t))
+            f233 = (1 / 2) * ((1 - mu) * np.exp(-R21 * t) + (1 + mu) * np.exp(-R22 * t))
             f223 = (-1j / 2) * v * (
                     sign_q * np.exp(-R21 * t) - sign_q * np.exp(-R22 * t)
             )

@@ -22,7 +22,7 @@ class PhaseCyclesVecDic:
         self.wQbar = wQbar
         self.Jen = Jen
         self.wShift = wShift
-        self.FreqShift = wShift
+        self.FreqShift = 0
         self.wShiftRMS = wShiftRMS
         self.wShiftFID = wShiftFID
         self.wShiftdist = None  # set externally (scipy frozen distribution)
@@ -49,7 +49,7 @@ class PhaseCyclesVecDic:
         self.dataPoints = 2048
         self.deadtimeFID = 6e-6
         self.dwelltimeFID = 50e-6
-        self.tauVec = np.linspace(0.0,70e-3,210) # half echo time
+        self.tauVec = np.linspace(0.0,100e-3,256) # half echo time
 
         # Simulation accuracy
         self.nPtsevo = 65   # endpoint accuracy ≡ 257 for smooth T2 decays
@@ -62,7 +62,8 @@ class PhaseCyclesVecDic:
     # Single-pulse validation
     # ------------------------------------------------------------------
     def SinglePulse(self):
-        times = self.deadtimeFID + self.TR * np.arange(self.dataPoints) / self.dataPoints
+        times = (self.deadtimeFID +
+                      self.dwelltimeFID * np.arange(self.dataPoints))
         wShiftvec = self.FreqShift + self.wShiftdist.rvs(self.nSpins)
         st = TmnEvoVecDic(self.B0, self.tauC, self.wQ, self.wQbar, self.Jen,
                           wShiftvec, self.wShiftRMS, self.wShiftFID)
@@ -182,7 +183,8 @@ class PhaseCyclesVecDic:
             # ── Acquire FID directly after 180 Pulse ───────────────────────────────
             relaxT11 = np.sum(stp.relax_T11_cached(cffid_pf), axis=0) *  np.exp(1j * np.pi) #sum over spins
             echoFIDs[echoIdx, :] = relaxT11
-            echoAmps[echoIdx] = np.amax(np.real(relaxT11))
+            echoIdxTime = np.argmin(np.abs(acqTimeVec - tau)) # find the time point closest to echotime/2
+            echoAmps[echoIdx] = np.real(relaxT11[echoIdxTime]) #echo Amplitude
 
 
 

@@ -13,6 +13,7 @@ from DataLoadingStoring.NEOreadIn import NEOreadInSE
 from Classes.spectralSampling import sampler_from_fid, smooth_spectrum, AdaptiveSpectrumSampler
 import plotly.graph_objects as go
 from sampleParams import SAMPLES
+from DataLoadingStoring.storeSimulRes import save_SinglePulse
 
 
 B0 = 9.4
@@ -20,7 +21,13 @@ w0 = getValues.getw0(B0)
 
 _sampleFWHMfromSP = False
 
-T1s, T1f, T2s, T2f = SAMPLES["Agar6"]
+storeResult = True
+
+sampleName = "Agar6SE_sr"
+
+T1s, T1f, T2s, T2f = SAMPLES[sampleName]
+
+print(f"Simulating with: \n T1s ={T1s} s \n T1f ={T1f} s \n T2s ={T2s} s \n T2f ={T2f} s \n  ")
 
 Jen, tauC, wQ, wShiftRMS = getValues.getJenModel(T1f, T1s, T2f, T2s, w0)
 
@@ -68,12 +75,13 @@ if _sampleFWHMfromSP:
     PC.wShiftdist = sampler
 
 else:
-    FWHM = 50
-    PC.wShiftdist = getValues.getWshiftDist('cauchy', 0, FWHM / 2)
+    scale  = 47.5 # Hz
+    FWHM =  2* scale #2 * np.pi * inhomBroadening # conversion to rad/s
+    PC.wShiftdist = getValues.getWshiftDist('cauchy', 0, scale)
 
 PC.dwelltimeFID   = 100e-6
-PC.dataPoints     = 2048
-PC.nSpins         = 1000
+PC.dataPoints     = 4096
+PC.nSpins         = 100
 PC.tmix           = 0.14e-3
 #PC.wShiftdist     = getValues.getWshiftDist('cauchy', 0, FWHM/2)
 #PC.wShiftdist     = getValues.getWshiftDist('normal', 0, FWHM/2)
@@ -82,24 +90,33 @@ PC.flip90         = 90.0
 PC.TR             = 400.0e-3
 
 
-FWHM_est= getValues.getDistFWHM(PC.wShiftdist)
+#FWHM_est= getValues.getDistFWHM(PC.wShiftdist)
 
 times, FID, TQ, SQ = PC.SinglePulse()
 
-FID = real(FID)
+FID = np.real(FID)
 
 FID /= np.amax(FID)
 
+"""plt.figure()
+plt.plot(real(FID[:500]))"""
 
 
+if storeResult:
+    save_SinglePulse(f"SinglePulse_{sampleName}_Gamma{scale}", PC, times, FID)
 
 # ------ FIT ------------
 
-p0 = [0.020,0.005, 0.4, 0.6, 0]
+"""p0 = [0.020,0.005, 0.4, 0.6, 0]
 popt, pcov = getFunction.fit_biexponentialSQ(times, FID, plot=True)
-
-plt.plot(times, FID)
-
-plt.show()
-
+print(f"SQ fit only: \n")
+print(*popt)
+popt, pcov, params = getFunction.fit_biexp_gamma(
+      times, FID, fixed={'T2a': T2s, 'T2b': T2f, 'A1': As, 'A2': Af, 'C': 0.0}
+  )
+popt, pcov, params = getFunction.fit_biexp_gamma(
+      times, FID, fixed={'T2a': T2s, 'T2b': T2f, 'A1': 0.4, 'A2': 0.6,'C': 0.0}
+  )
+print("Gamma Fit: \n")
 print(popt)
+"""

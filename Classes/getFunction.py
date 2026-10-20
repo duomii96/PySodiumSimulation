@@ -39,6 +39,16 @@ class getFunction:
         return A1 * np.exp(-t / T2a) + (1-A1) * np.exp(-t / T2b) + C
 
     @staticmethod
+    def getFunc_biexp_gamma(t, T2a, T2b, A1, A2, C, gamma):
+        """
+        Biexponential decay with an additional common e^(-gamma*t) factor
+        multiplied onto both relaxation exponentials, accounting for extra
+        dephasing from B0 inhomogeneity (gamma = scale parameter used for
+        sampling the B0 inhomogeneity distribution).
+        """
+        return (A1 * np.exp(-t / T2a) + A2 * np.exp(-t / T2b)) * np.exp(-gamma * t) + C
+
+    @staticmethod
     def getFunc_TQTPPI_FID(t, T2s, T2f, As, Af, Atq, omega, ph1, ph2, C):
         return np.sin(t * omega * 2 * np.pi + ph1) * (As * np.exp(-t / T2s) + Af * np.exp(-t / T2f)) + Atq * np.sin(
             3 * 2 * np.pi * omega * t + ph2) * (np.exp(-t / T2s) - np.exp(-t / T2f)) + C
@@ -127,6 +137,70 @@ class getFunction:
 
 
         return popt, pcov
+
+    @staticmethod
+    def fit_biexp_gamma(t, y, p0=None, bounds=None, fixed=None, plot=False):
+        """
+        Fit getFunc_biexp_gamma to data.
+
+        fixed : dict, optional
+            Any subset of {'T2a', 'T2b', 'A1', 'A2', 'C'} with already-known
+            values. Parameters given here are held fixed during the fit;
+            only the remaining ones (gamma always included) are optimized.
+            e.g. fixed={'T2a': 0.030, 'T2b': 0.010, 'A1': 0.4, 'A2': 0.6, 'C': 0}
+            leaves gamma as the only free parameter.
+
+        Returns
+        -------
+        popt, pcov : optimized values (free params only) and their covariance
+        fullParams : dict with all six parameter names/values (fixed + fitted)
+        """
+        t = np.asarray(t, dtype=float)
+        y = np.asarray(y, dtype=float)
+
+        if np.amax(y) > 1:
+            y = y / np.amax(y)
+
+        if fixed is None:
+            fixed = {}
+
+        allNames = ['T2a', 'T2b', 'A1', 'A2', 'C']
+        freeNames = [n for n in allNames if n not in fixed] + ['gamma']
+
+        p0default = {'T2a': 0.030, 'T2b': 0.010, 'A1': 0.4, 'A2': 0.6, 'C': 0.0, 'gamma': 1000.0}
+        lowerAll = {'T2a': 0, 'T2b': 0, 'A1': 0, 'A2': 0, 'C': -0.1, 'gamma': 0}
+        upperAll = {'T2a': 0.07, 'T2b': 0.07, 'A1': 1, 'A2': 1, 'C': 0.1, 'gamma': 1e5}
+
+        if p0 is None:
+            p0 = [p0default[n] for n in freeNames]
+
+        if bounds is None:
+            bounds = ([lowerAll[n] for n in freeNames],
+                       [upperAll[n] for n in freeNames])
+
+        def _wrapped(t, *params):
+            kwargs = dict(fixed)
+            kwargs.update(zip(freeNames, params))
+            return getFunction.getFunc_biexp_gamma(
+                t, kwargs['T2a'], kwargs['T2b'], kwargs['A1'], kwargs['A2'],
+                kwargs['C'], kwargs['gamma']
+            )
+
+        popt, pcov = curve_fit(_wrapped, t, y, p0=p0, bounds=bounds, maxfev=20000)
+
+        fullParams = dict(fixed)
+        fullParams.update(zip(freeNames, popt))
+
+        if plot:
+            plt.figure(figsize=(9, 5), dpi=200)
+            plt.plot(t, y, 'o-', label="Data")
+            plt.plot(t, _wrapped(t, *popt), label="Fit")
+            plt.grid(True)
+            plt.xlabel("Time (s)")
+            plt.legend()
+            plt.show()
+
+        return popt, pcov, fullParams
 
     def fit_TQTTPI_FID(t, y, p0=None, bounds=None):
         t = np.asarray(t, dtype=float)

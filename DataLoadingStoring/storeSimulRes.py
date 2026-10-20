@@ -53,6 +53,71 @@ def save_TQTPPI(filename, PC, acqTimeVec, mqSpectrum, mqFID, FIDs, tevos, popt=N
 
 
 
+def save_SpinEcho(filename, PC, acqTimeVec, echoFIDs, echoAmps, tauVec):
+    folder_path = Path(r"C:\Users\dz8\MatlabStuff\Scripte\PaperSimulation\SimulationDataH5\SpinEcho")
+
+    # 2. Combine the folder path with the filename you passed in
+    full_path = folder_path / filename
+
+    with h5py.File(full_path, "a") as f:  # 'a' so multiple sequences can be appended to same file
+        if "SpinEcho" in f:
+            del f["SpinEcho"]  # remove old group so re-runs don't collide
+        seq = f.create_group("SpinEcho")
+        # --- Simulated data ---
+        data = seq.require_group("data")
+        save_complex(data, "echoFIDs", echoFIDs)       # (nEchoes, nT) complex, FID per echo
+        data.create_dataset("echoAmps", data=echoAmps)  # (nEchoes,) on-resonance echo amplitude
+
+        # --- Time / axis arrays ---
+        time = seq.require_group("time")
+        time.create_dataset("acqTimeVec", data=acqTimeVec)   # FID acquisition time axis
+        time.create_dataset("tauVec", data=tauVec)             # half-echo-time axis (indirect dim)
+
+        # --- Metadata / NMR pulse parameters ---
+        meta = seq.require_group("meta")
+        meta.attrs["sequence"]        = "SpinEcho"
+        meta.attrs["dwelltimeFID"]    = PC.dwelltimeFID
+        meta.attrs["dataPoints"]      = PC.dataPoints
+        meta.attrs["nSpins"]          = PC.nSpins
+        meta.attrs["flip90"]          = PC.flip90
+        meta.attrs["flip180"]         = PC.flip180
+        meta.attrs["TR"]              = PC.TR
+        meta.attrs["nPtsevo"]         = PC.nPtsevo
+
+
+def save_SinglePulse(filename, PC, times, FID, popt=None):
+    folder_path = Path(r"C:\Users\dz8\MatlabStuff\Scripte\PaperSimulation\SimulationDataH5\SinglePulse")
+
+    # 2. Combine the folder path with the filename you passed in
+    full_path = folder_path / filename
+
+    with h5py.File(full_path, "a") as f:  # 'a' so multiple sequences can be appended to same file
+        if "SinglePulse" in f:
+            del f["SinglePulse"]  # remove old group so re-runs don't collide
+        seq = f.create_group("SinglePulse")
+        # --- Simulated data ---
+        data = seq.require_group("data")
+        save_complex(data, "FID", FID)   # (dataPoints,) complex, single-pulse FID
+
+
+        # --- Time / axis arrays ---
+        time = seq.require_group("time")
+        time.create_dataset("times", data=times)   # FID acquisition time axis
+
+        # --- Fit results (optional, if available) ---
+        if popt is not None:
+            seq.create_dataset("fit_popt", data=np.asarray(popt))
+
+        # --- Metadata / NMR pulse parameters ---
+        meta = seq.require_group("meta")
+        meta.attrs["sequence"]        = "SinglePulse"
+        meta.attrs["dwelltimeFID"]    = PC.dwelltimeFID
+        meta.attrs["dataPoints"]      = PC.dataPoints
+        meta.attrs["nSpins"]          = PC.nSpins
+        meta.attrs["flip90"]          = PC.flip90
+        meta.attrs["TR"]              = PC.TR
+
+
 def save_IRTQTPPI(filename, PC, mqFID, mqSpectrum, tevos):
     folder_path = Path(r"C:\Users\dz8\MatlabStuff\Scripte\PaperSimulation\SimulationDataH5\IRTQTPPI")
 
@@ -61,6 +126,8 @@ def save_IRTQTPPI(filename, PC, mqFID, mqSpectrum, tevos):
 
 
     with h5py.File(full_path, "a") as f:  # append mode, same file as other sequences
+        if "IRTQTPPI" in f:
+            del f["IRTQTPPI"]  # remove old group so re-runs don't collide
         seq = f.require_group("IRTQTPPI")
 
         # --- Simulated data ---

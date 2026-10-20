@@ -165,6 +165,6 @@ def check_method_files(root_folder):
 
 
 # Example usage:
-check_method_files(r"J:\AG_XNMR\14_Reichert\Messdaten\RawData\NEO\ZI\SR_SR_SEvTQTPPI_BrukerLin_1_9_20230623_165629")
+check_method_files(r"C:\Users\dz8\Data\Messdaten\DZ_ThimoAgar_nReco_1_44_20260119_160948")
 
 #check_method_files_specific(r"J:\AG_XNMR\14_Reichert\Messdaten\RawData\NEO\ZI\SR_SR_SEvTQTPPI_BrukerLin_1_9_20230623_165629")

@@ -20,12 +20,14 @@ class SpectrumSampler:
         Number of original spectral points to group into one bin.
         bin_size=1 keeps full resolution (no binning).
     to_angular : bool, optional
-        If True, samples are returned in rad/s (i.e. multiplied by 2*pi)
-        so they can be assigned directly to wShiftvec when the phase
-        factors in add_phase_factors expect angular frequency.
+        add_phase_factors() converts wShiftvec from Hz to rad/s itself,
+        so this should normally stay False (samples returned in Hz, same
+        units as `nu`). Only set True if assigning samples directly to
+        something that expects rad/s without going through
+        add_phase_factors.
     """
 
-    def __init__(self, nu, spectrum, bin_size=1, to_angular=True):
+    def __init__(self, nu, spectrum, bin_size=1, to_angular=False):
         nu = np.asarray(nu, dtype=float)
         spectrum = np.asarray(spectrum, dtype=float)
 

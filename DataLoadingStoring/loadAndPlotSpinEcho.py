@@ -2,11 +2,11 @@ from pathlib import Path
 
 import numpy as np
 
-from DataLoading.NEOreadIn import NEOreadInSE
+from DataLoadingStoring.NEOreadIn import NEOreadInSE
 from commonImports import *
 from Classes.getFunction import getFunction
 from pathlib import Path
-from DataLoading.NEOreadIn import NEOreadInSE
+from DataLoadingStoring.NEOreadIn import NEOreadInSE
 from commonImports import *
 
 # 1. Base path pointing to the parent folder of the repetition numbers

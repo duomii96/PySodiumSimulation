@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import h5py
 
-
+from dict_params import gamma_column
 
 
 @dataclass
@@ -15,7 +15,7 @@ class QueryResult:
     T2s_ms:         float
     Af:             float
     As:             float
-    FWHM_Hz:        float
+    gamma:          float               # Cauchy scale of wShiftdist [rad/s]
     tevo_used_ms:   float
     n_candidates:   int
     dist:           np.ndarray          # [nEntries]  full distance vector (np.inf for filtered-out)
@@ -37,8 +37,8 @@ def query_dictionary(
     TQ_meas: np.ndarray,
     tevo_ms: float,
     matching_norm: str,
-    FWHM_meas_Hz: float,
-    FWHM_tol_Hz: float = 10.0,
+    gamma_meas: float,
+    gamma_tol: float = 5.0,
 
 ) -> QueryResult:
     """
@@ -50,8 +50,8 @@ def query_dictionary(
     SQ_meas      : measured SQ curve, shape (nT,)
     TQ_meas      : measured TQ curve, shape (nT,)
     tevo_ms      : evolution time of the measurement (ms)
-    FWHM_meas_Hz : measured linewidth (Hz)
-    FWHM_tol_Hz  : FWHM pre-filter tolerance (Hz), default 10
+    gamma_meas   : Cauchy scale of wShiftdist [rad/s] (FWHM = 2*gamma)
+    gamma_tol    : gamma pre-filter tolerance [rad/s], default 5
 
     Returns
     -------
@@ -62,7 +62,7 @@ def query_dictionary(
         with h5py.File(fname, "r") as f:
             tevo_vec = f["/tevo"][:]
             acqTime  = f["/acqTime"][:]
-            params   = f["/params"][:]      # [nEntries x 3]: [T2f, T2s, FWHM]
+            params   = f["/params"][:]      # [nEntries x 3]: [T2f, T2s, gamma (old: FWHM)]
             T2f_fit  = f["/T2ffit"][:]
             T2s_fit  = f["/T2sfit"][:]
             Af_fit   = f["/Affit"][:]
@@ -73,7 +73,7 @@ def query_dictionary(
             T1s_in   = T2s_in * 1.175
             SQ_full  = f["/SQ"][:]         # [nEntries x nEvo x nT]
             TQ_full  = f["/TQ"][:]
-            FWHM_dict = params[:, 2]
+            gamma_dict = gamma_column(params, f.attrs)
 
 
     except:
@@ -90,7 +90,7 @@ def query_dictionary(
             T2s_in = params[:,1]
             T1f_in = T2s_in * 0.825
             T1s_in = T2s_in * 1.175
-            FWHM_dict = params[:, 2]
+            gamma_dict = gamma_column(params, f.attrs)
             SQ_full = f["/SQ"][:]
             TQ_full = f["/TQ"][:]
 
@@ -117,21 +117,21 @@ def query_dictionary(
         f"(closest dict tevo={tevo_vec[tevo_idx]*1e3:.0f}ms, index={tevo_idx})"
     )
 
-    # ── FWHM pre-filtering ────────────────────────────────────────────────
+    # ── gamma pre-filtering ───────────────────────────────────────────────
 
-    FWHM_mask  = np.abs(FWHM_dict - FWHM_meas_Hz) <= FWHM_tol_Hz
-    n_cand     = int(FWHM_mask.sum())
+    gamma_mask = np.abs(gamma_dict - gamma_meas) <= gamma_tol
+    n_cand     = int(gamma_mask.sum())
 
     print(
-        f"FWHM filter: {FWHM_meas_Hz:.0f}Hz +/- {FWHM_tol_Hz:.0f}Hz "
+        f"gamma filter: {gamma_meas:.1f} +/- {gamma_tol:.1f} rad/s "
         f"-> {n_cand}/{nEntries} entries pass"
     )
 
     if n_cand == 0:
         raise ValueError(
-            f"No dictionary entries within {FWHM_tol_Hz:.0f} Hz of measured "
-            f"FWHM={FWHM_meas_Hz:.0f} Hz.\n"
-            "Widen FWHM_tol_Hz or extend the FWHM range of the dictionary."
+            f"No dictionary entries within {gamma_tol:.1f} rad/s of "
+            f"gamma={gamma_meas:.1f} rad/s.\n"
+            "Widen gamma_tol or extend the gamma range of the dictionary."
         )
 
     # ── Slice SQ/TQ at selected tevo ─────────────────────────────────────
@@ -148,8 +148,8 @@ def query_dictionary(
         D_TQ_all = TQ_full[:, tevo_idx, :nT_meas]
 
 
-    D_SQ = D_SQ_all[FWHM_mask]   # [n_cand x nT]
-    D_TQ = D_TQ_all[FWHM_mask]
+    D_SQ = D_SQ_all[gamma_mask]   # [n_cand x nT]
+    D_TQ = D_TQ_all[gamma_mask]
 
     # ── Normalise ─────────────────────────────────────────────────────────
     q_SQ = SQ_meas / SQ_meas.max()
@@ -175,10 +175,10 @@ def query_dictionary(
 
     # Map back to full distance vector (np.inf for filtered-out entries)
     dist_full = np.full(nEntries, np.inf)
-    dist_full[FWHM_mask] = dist_cand
+    dist_full[gamma_mask] = dist_cand
 
     sorted_cand   = np.argsort(dist_cand)
-    cand_indices  = np.where(FWHM_mask)[0]
+    cand_indices  = np.where(gamma_mask)[0]
     K             = min(10, n_cand)
     top_full_idx  = cand_indices[sorted_cand[:K]]
     best          = top_full_idx[0]
@@ -189,7 +189,7 @@ def query_dictionary(
         T2s_ms        = float(np.squeeze(T2s_fit)[best].item()) * 1e3,
         Af            = float(np.squeeze(Af_fit)[best].item()),
         As            = float(np.squeeze(As_fit)[best].item()),
-        FWHM_Hz       = float(params[best, 2].item()),
+        gamma         = float(gamma_dict[best].item()),
         tevo_used_ms  = float(tevo_vec[tevo_idx].item()) * 1e3,
         n_candidates  = n_cand,
         dist          = dist_full,
@@ -208,7 +208,7 @@ def query_dictionary(
     # ── Print summary ─────────────────────────────────────────────────────
     print(
         f"Best match:  T2f*={result.T2f_ms:.2f}ms  "
-        f"T2s*={result.T2s_ms:.1f}ms  FWHM={result.FWHM_Hz:.1f}Hz"
+        f"T2s*={result.T2s_ms:.1f}ms  gamma={result.gamma:.1f}rad/s"
     )
     print(f"Input T2:    T2f ={result.T2f_input_ms:.2f}ms  T2s ={result.T2s_input_ms:.1f}ms")
     print(

@@ -5,14 +5,16 @@ pre-fits T2f/T2s from low-evolution curves, and saves everything to HDF5.
 
 Dictionary structure
 --------------------
-For each entry (T2f_param, T2s_param, FWHM):
+For each entry (T2f_param, T2s_param, gamma):
+  gamma = scale of the Cauchy wShift distribution [rad/s] (HWHM, FWHM = 2*gamma)
+          -> passed directly to getWshiftDist; FID dephasing ~ exp(-gamma*t)
   - SQ and TQ curves at all tevo values (used for high-evo matching)
   - T2ffit, T2sfit from low-evo fit (returned after matching)
   - Affit, Asfit amplitudes from fit
 
 HDF5 layout
 -----------
-  params      N × 3          [T2fs, T2ss, FWHM_Hz] input grid
+  params      N × 3          [T2fs, T2ss, gamma_rad_s] input grid
   tevo        1 × nEvo       evolution times [s]
   acqTime     1 × nT         acquisition time vector [s]
   SQ          N × nEvo × nT  SQ curves
@@ -47,7 +49,7 @@ from Classes.PhaseCycles_VecDic import PhaseCyclesVecDic
 # ─────────────────────────────────────────────────────────────────────────────
 def _run_single(
     k, iEntry, iEvo,
-    T2f, T2s, FWHM, tevo,
+    T2f, T2s, gamma, tevo,
     # basePC config — passed as plain scalars to avoid pickling the whole object
     B0, wQbar, FreqShift, wShiftFID,
     nSpins, NumPhaseCycles, alphas,
@@ -56,11 +58,15 @@ def _run_single(
     pdistname,
     idxTQ, idxSQ,
     n_numba_threads,
+    rng_seed,
 ):
     """
-    Simulate one (T2f, T2s, FWHM, tevo) combination.
+    Simulate one (T2f, T2s, gamma, tevo) combination.
+    rng_seed fixes the wShiftdist Monte Carlo draws so every job is reproducible.
     Returns (k, iEntry, iEvo, SQ_row, TQ_row).
     """
+    np.random.seed(rng_seed)
+
     # Limit Numba threads per worker so we don\'t over-subscribe the CPU
     numba.set_num_threads(n_numba_threads)
 
@@ -69,7 +75,7 @@ def _run_single(
     T1fest  = 0.825 * T2s
     Jenk, tauCk, wQk, wShiftRMSk = getValues.getJenModel(T1fest, T1sest, T2f, T2s, w0k)
 
-    wShiftdistk = getValues.getWshiftDist(pdistname, 0.0, FWHM / 2.0)
+    wShiftdistk = getValues.getWshiftDist(pdistname, 0.0, gamma)
     wShiftRMSk  = 0.0   # consistent with Lorentzian linewidth contribution
 
     sim = PhaseCyclesVecDic(B0, tauCk, wQk, wQbar, Jenk,
@@ -135,23 +141,23 @@ def build_and_save_dictionary(n_jobs: int = -1):
     # ------------------------------------------------------------------
     # Parameter grid
     # ------------------------------------------------------------------
-    T2fvec  = np.logspace(np.log10(5e-3),   np.log10(18e-3),  6)
-    T2svec  = np.logspace(np.log10(15.1e-3), np.log10(50e-3), 6)
-    FWHMvec = np.linspace(60, 90, 4, endpoint=True)
+    T2fvec  = np.logspace(np.log10(4e-3),   np.log10(15e-3),  8)
+    T2svec  = np.logspace(np.log10(20e-3), np.log10(55e-3), 12)
+    gammavec = np.linspace(20, 60, 5, endpoint=True)   # Cauchy scale [rad/s] (old "FWHM" 60–90 / 2)
 
-    params   = PhaseCyclesVecDic.make_param_grid(T2fvec, T2svec, FWHMvec)
+    params   = PhaseCyclesVecDic.make_param_grid(T2fvec, T2svec, gammavec)
     nEntries = params.shape[0]
 
     # ------------------------------------------------------------------
     # Evolution times
     # ------------------------------------------------------------------
-    tevovec    = np.array([1, 2, 5, 10,11, 12, 13, 14, 15, 20, 25, 30, 35]) * 1e-3
+    tevovec    = np.array([1, 2, 5, 10, 15, 20, 25, 30, 35]) * 1e-3
     fittevoidx = 0
     nEvo       = len(tevovec)
     total      = nEntries * nEvo
 
-    print(f"Full grid before filter: {len(T2fvec) * len(T2svec) * len(FWHMvec)} × {nEvo} = "
-          f"{len(T2fvec) * len(T2svec) * len(FWHMvec) * nEvo} total")
+    print(f"Full grid before filter: {len(T2fvec) * len(T2svec) * len(gammavec)} × {nEvo} = "
+          f"{len(T2fvec) * len(T2svec) * len(gammavec) * nEvo} total")
     print(f"After T2s≥2·T2f filter: {nEntries} × {nEvo} = {total} simulations")
     #print(f"Grid: {nEntries} entries × {nEvo} tevo = {total} simulations")
     print(f"Fitting will use tevo={tevovec[fittevoidx]*1e3:.0f} ms (index {fittevoidx})")
@@ -175,6 +181,7 @@ def build_and_save_dictionary(n_jobs: int = -1):
     n_phys = _os.cpu_count() or 1
     n_workers = min(16, n_phys) if n_jobs == -1 else min(16, max(1, n_jobs))
     n_numba_threads = 1
+    rng_seed_base   = 42   # job k uses seed rng_seed_base + k
     print(f"Using {n_workers} workers × {n_numba_threads} Numba thread(s) each "
           f"(total threads ≤ {n_workers * n_numba_threads})")
 
@@ -198,7 +205,7 @@ def build_and_save_dictionary(n_jobs: int = -1):
     t0 = time.time()
     results = Parallel(n_jobs=n_workers, backend="loky", verbose=5)(
         delayed(_run_single)(
-            k, iEntry, iEvo, T2f, T2s, FWHM, tevo,
+            k, iEntry, iEvo, T2f, T2s, gamma, tevo,
             B0, PC.wQbar, PC.FreqShift, PC.wShiftFID,
             PC.nSpins, PC.NumPhaseCycles, PC.alphas,
             PC.flip90, PC.tmix, PC.deadtimeFID, PC.dwelltimeFID, PC.dataPoints,
@@ -206,8 +213,9 @@ def build_and_save_dictionary(n_jobs: int = -1):
             pdistname,
             idxTQ, idxSQ,
             n_numba_threads,
+            rng_seed_base + k,
         )
-        for k, iEntry, iEvo, T2f, T2s, FWHM, tevo in jobs
+        for k, iEntry, iEvo, T2f, T2s, gamma, tevo in jobs
     )
 
     for k, iEntry, iEvo, SQ_row, TQ_row in results:
@@ -270,7 +278,7 @@ def build_and_save_dictionary(n_jobs: int = -1):
     # ------------------------------------------------------------------
     # Save to HDF5
     # ------------------------------------------------------------------
-    fname = os.path.join(os.getcwd(), 'proteins_dict_6090FWHM.h5')
+    fname = os.path.join(os.getcwd(), 'dict_general_gamma2060.h5')
     if os.path.exists(fname):
         os.remove(fname)
 
@@ -294,9 +302,11 @@ def build_and_save_dictionary(n_jobs: int = -1):
         f.attrs['dwelltimeus']    = PC.dwelltimeFID * 1e6
         f.attrs['dataPoints']     = PC.dataPoints
         f.attrs['created']        = datetime.now().isoformat()
+        f.attrs['params_columns'] = 'T2f_s, T2s_s, gamma_rad_s (Cauchy scale, FWHM = 2*gamma)'
+        f.attrs['rng_seed_base']  = rng_seed_base
 
     size_mb = os.path.getsize(fname) / 1e6
-    print(f"nSaved: {fname}  ({size_mb:.1f} MB)")
+    print(f"\nSaved: {fname}  ({size_mb:.1f} MB)")
     with h5py.File(fname, 'r') as f:
         print(f"Datasets: {list(f.keys())}")
 
@@ -307,13 +317,13 @@ def build_and_save_dictionary(n_jobs: int = -1):
         import matplotlib.pyplot as plt
         fig, axes = plt.subplots(1, 2, figsize=(10, 4))
         axes[0].scatter(params[:, 0]*1e3, T2ffit*1e3, s=20)
-        axes[0].plot([0, 10], [0, 10], 'r--')
+        axes[0].plot([0, 20], [0, 20], 'r--')
         axes[0].set_xlabel('T2f input (ms)'); axes[0].set_ylabel('T2f fitted (ms)')
         axes[0].set_title('T2f input vs fitted'); axes[0].axis('equal'); axes[0].grid(True)
 
         axes[1].scatter(params[:, 1]*1e3, T2sfit*1e3, s=20)
         axes[1].plot([0, 120], [0, 120], 'r--')
-        axes[1].set_xlabel('T2s input (ms)\); axes[1].set_ylabel(\T2s fitted (ms)')
+        axes[1].set_xlabel('T2s input (ms)'); axes[1].set_ylabel('T2s fitted (ms)')
         axes[1].set_title('T2s input vs fitted'); axes[1].axis('equal'); axes[1].grid(True)
 
         fig.suptitle(f'Dictionary {nEntries} entries, fit tevo={tevovec[fittevoidx]*1e3:.0f} ms')
@@ -326,7 +336,7 @@ def build_and_save_dictionary(n_jobs: int = -1):
 
 
 if __name__ == '__main__':
-    build_and_save_dictionary(n_jobs=-1)
+    build_and_save_dictionary(n_jobs=16)
 
 
 """with open('build_and_save_dictionary.py', 'w') as f:

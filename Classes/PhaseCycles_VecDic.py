@@ -341,7 +341,7 @@ class PhaseCyclesVecDic:
         Non-fixed TQTPPI without 180° refocusing pulse.
         Same structure as TQTPPIWith180 but with a single full tevo
         evolution instead of two tevo/2 halves.
-        tevo increments by self.tevoStep at every phase cycle step.
+        tevo increments by self.tevoStep at every phase cycle step.TQT
         """
         acqTimeVec = (self.deadtimeFID +
                       self.dwelltimeFID * np.arange(self.dataPoints))
@@ -901,11 +901,12 @@ class PhaseCyclesVecDic:
 
 
     @staticmethod
-    def make_param_grid(T2fvec, T2svec, FWHMvec):
-        """Create valid parameter grid (T2f, T2s, FWHM)."""
-        T2fg, T2sg, FWHMg = np.meshgrid(T2fvec, T2svec, FWHMvec, indexing='ij')
+    def make_param_grid(T2fvec, T2svec, gammavec):
+        """Create valid parameter grid (T2f, T2s, gamma).
+        gamma = Cauchy scale of wShiftdist [rad/s] (half width at half maximum)."""
+        T2fg, T2sg, gammag = np.meshgrid(T2fvec, T2svec, gammavec, indexing='ij')
         valid = T2sg >= 2 * T2fg
-        params = np.column_stack([T2fg[valid], T2sg[valid], FWHMg[valid]])
+        params = np.column_stack([T2fg[valid], T2sg[valid], gammag[valid]])
         print(f"Parameter grid: {params.shape[0]} valid combinations")
         return params
 

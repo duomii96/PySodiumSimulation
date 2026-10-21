@@ -1,11 +1,13 @@
 """
 compare_dictionaries.py
 Compare SQ and TQ curves between two HDF5 dictionaries for matching
-(T2f, T2s, FWHM) parameter entries.
+(T2f, T2s, gamma) parameter entries.
+gamma = Cauchy scale of wShiftdist [rad/s]; older dictionaries stored FWHM = 2*gamma
+and are converted on load.
 
 Usage
 -----
-Set fname_a, fname_b, target_FWHM, target_tevo_ms and optionally tol_ms
+Set fname_a, fname_b, target_gamma, target_tevo_ms and optionally tol_ms
 at the bottom of this file, then run:
     python compare_dictionaries.py
 """
@@ -14,6 +16,8 @@ import numpy as np
 import h5py
 import matplotlib.pyplot as plt
 from itertools import product
+
+from dict_params import gamma_column
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -40,6 +44,7 @@ def load_dict(fname: str) -> dict:
         TQ_raw  = f["/TQ"][()]
         acqTime = f["/acqTime"][()].ravel()
         tevo    = f["/tevo"][()].ravel()
+        attrs   = dict(f.attrs)
 
         T2ffit = (f["/T2ffit"][()] if "T2ffit" in keys else
                   f["/T2f_fit"][()] if "T2f_fit" in keys else None)
@@ -55,6 +60,10 @@ def load_dict(fname: str) -> dict:
         matlab_layout = False
 
     nEntries = params.shape[0]
+
+    # Column 2 → gamma [rad/s] (old dictionaries stored FWHM = 2*gamma)
+    params = params.astype(float, copy=True)
+    params[:, 2] = gamma_column(params, attrs)
 
     # SQ/TQ: MATLAB layout is (nT, nEvo, nEntries) → transpose to (nEntries, nEvo, nT)
     #        Python layout is (nEntries, nEvo, nT)  → no change needed
@@ -88,7 +97,7 @@ def load_dict(fname: str) -> dict:
 def compare_dictionaries(
     fname_a: str,
     fname_b: str,
-    target_FWHM: float,           # Hz  — FWHM slice to compare
+    target_gamma: float,          # rad/s — gamma slice to compare
     target_tevo_ms,               # ms  — single value or list, e.g. 10 or [5, 10, 20]
     tol_ms: float = 1.5,          # ms  — tolerance for T2f / T2s matching
     max_pairs: int = 12,          # cap on individual pair figures
@@ -96,14 +105,14 @@ def compare_dictionaries(
     label_b: str = None,
 ):
     """
-    Find entries with the same FWHM and similar (T2f, T2s) in both dictionaries,
+    Find entries with the same gamma and similar (T2f, T2s) in both dictionaries,
     then plot side-by-side SQ and TQ curves for each matched pair at the
     requested evolution time(s).
 
     Parameters
     ----------
     fname_a, fname_b   : paths to the two HDF5 files
-    target_FWHM        : FWHM value (Hz) to filter on
+    target_gamma       : gamma value (rad/s) to filter on
     target_tevo_ms     : evolution time(s) in ms to plot, e.g. 10 or [5, 10, 20]
     tol_ms             : matching tolerance for T2f and T2s in milliseconds
     max_pairs          : max number of matched pairs to show individually
@@ -148,18 +157,18 @@ def compare_dictionaries(
 
     nEvoPlot = len(evo_idxs_a)
 
-    # ── Filter by FWHM ────────────────────────────────────────────────────
-    def fwhm_mask(d, fwhm_val):
-        fwhm_col = d["params"][:, 2]
-        closest  = fwhm_col[np.argmin(np.abs(fwhm_col - fwhm_val))]
-        if abs(closest - fwhm_val) > 5:
+    # ── Filter by gamma ───────────────────────────────────────────────────
+    def gamma_mask(d, gamma_val):
+        gamma_col = d["params"][:, 2]
+        closest   = gamma_col[np.argmin(np.abs(gamma_col - gamma_val))]
+        if abs(closest - gamma_val) > 2.5:
             raise ValueError(
-                f"FWHM={fwhm_val} Hz not found in {d['fname']}. "
-                f"Available: {np.unique(fwhm_col)}")
-        return fwhm_col == closest, closest
+                f"gamma={gamma_val} rad/s not found in {d['fname']}. "
+                f"Available: {np.unique(gamma_col)}")
+        return gamma_col == closest, closest
 
-    mask_a, fwhm_used_a = fwhm_mask(da, target_FWHM)
-    mask_b, fwhm_used_b = fwhm_mask(db, target_FWHM)
+    mask_a, gamma_used_a = gamma_mask(da, target_gamma)
+    mask_b, gamma_used_b = gamma_mask(db, target_gamma)
 
     pa  = da["params"][mask_a]
     pb  = db["params"][mask_b]
@@ -168,8 +177,8 @@ def compare_dictionaries(
     SQb = db["SQ"][mask_b]
     TQb = db["TQ"][mask_b]
 
-    print(f"FWHM filter: A={fwhm_used_a:.0f} Hz ({mask_a.sum()} entries), "
-          f"B={fwhm_used_b:.0f} Hz ({mask_b.sum()} entries)")
+    print(f"gamma filter: A={gamma_used_a:.1f} rad/s ({mask_a.sum()} entries), "
+          f"B={gamma_used_b:.1f} rad/s ({mask_b.sum()} entries)")
 
     # ── Match entries by T2f and T2s ──────────────────────────────────────
     # Vectorised: (nA, 1) vs (1, nB) for each param
@@ -204,7 +213,7 @@ def compare_dictionaries(
         T2f_b_ms = pb[iB, 0] * 1e3
         T2s_b_ms = pb[iB, 1] * 1e3
 
-        title = (f"Pair {pair_n+1}  |  FWHM={target_FWHM:.0f} Hz  |  "
+        title = (f"Pair {pair_n+1}  |  gamma={target_gamma:.1f} rad/s  |  "
                  f"T2f: {T2f_a_ms:.2f} / {T2f_b_ms:.2f} ms  "
                  f"T2s: {T2s_a_ms:.1f} / {T2s_b_ms:.1f} ms")
         print(f"  {title}")
@@ -248,7 +257,7 @@ def compare_dictionaries(
         fig_ov, axes_ov = plt.subplots(2, 2, figsize=(13, 8),
                                        num="Overlay — all matched pairs")
         fig_ov.suptitle(
-            f"Overlay: {len(matches)} pairs  |  FWHM={target_FWHM:.0f} Hz  |  "
+            f"Overlay: {len(matches)} pairs  |  gamma={target_gamma:.1f} rad/s  |  "
             f"tevo={evo_labels[0]}", fontsize=10)
 
         for col_p, (iA, iB) in enumerate(matches):
@@ -285,7 +294,7 @@ if __name__ == "__main__":
     compare_dictionaries(
         fname_a        = "pyMatlab_CompareDict.h5",
         fname_b        = "dictionary_adjFWHM30100.h5",
-        target_FWHM    = 60,            # Hz
+        target_gamma   = 30,            # rad/s (old "FWHM" 60)
         target_tevo_ms = [10, 20, 25],   # ms — single value or list
         tol_ms         = 1.5,           # matching tolerance in ms
         max_pairs      = 12,

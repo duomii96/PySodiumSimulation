@@ -66,7 +66,7 @@ T2f_gt_err = 1.2
 
 denoise_TQ = 0
 
-FWHM, FWHM_tol = 80,10
+gamma, gamma_tol = 40, 5   # Cauchy scale of wShiftdist [rad/s] (old "FWHM" 80 +/- 10)
 norm_to_match = "2"
 
 #skip_indices    = list(range(33, 60))   # [12:1:19] inclusive
@@ -189,9 +189,9 @@ for k in np.arange(start_folder, stop_folder + 1):
         tq_denoised = wavelet_denoising(tq_peaks, level = 1)
         #tq_peaks = tq_denoised
 
-        result = query_dictionary(dict_name, sq_peaks, tq_denoised, evo_time, norm_to_match, FWHM, FWHM_tol)
+        result = query_dictionary(dict_name, sq_peaks, tq_denoised, evo_time, norm_to_match, gamma, gamma_tol)
     else:
-        result = query_dictionary(dict_name, sq_peaks, tq_peaks, evo_time, norm_to_match,FWHM, FWHM_tol)
+        result = query_dictionary(dict_name, sq_peaks, tq_peaks, evo_time, norm_to_match, gamma, gamma_tol)
 
     top5_T2s = result.top10_T2s[:5]
     top5_T2f = result.top10_T2f[:5]

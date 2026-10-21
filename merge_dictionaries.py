@@ -6,16 +6,20 @@ The two files must have been generated with the same:
   - acquisition parameters (dataPoints, dwelltimeFID, deadtimeFID)
   - tevo_vec
   - NumPhaseCycles, alphaStep
-They can differ in their params (T2f, T2s, FWHM) grid — that is the point.
+They can differ in their params (T2f, T2s, gamma) grid — that is the point.
 
-params layout: [T2f (s), T2s (s), FWHM (Hz)]  — input T2 values are
+params layout: [T2f (s), T2s (s), gamma (rad/s)]  — input T2 values are
                read directly from params[:,0] and params[:,1].
+               Older inputs that stored FWHM = 2*gamma are converted to gamma
+               on load, so the merged file always stores gamma.
 """
 
 import numpy as np
 import h5py
 import os
 from datetime import datetime
+
+from dict_params import gamma_column
 
 
 # Keys that travel with each dictionary entry (axis-0 indexed)
@@ -27,6 +31,8 @@ def _load(fname: str) -> dict:
     with h5py.File(fname, "r") as f:
         d = {k: f[k][()] for k in f.keys()}
         d["_attrs"] = dict(f.attrs)
+    d["params"] = d["params"].astype(float, copy=True)
+    d["params"][:, 2] = gamma_column(d["params"], d["_attrs"])
     return d
 
 
@@ -65,9 +71,9 @@ def _remove_duplicates(a: dict, b: dict) -> tuple[dict, int]:
 
 
 def _sort_merged(data: dict) -> dict:
-    """Sort all per-entry arrays by FWHM → T2s → T2f."""
+    """Sort all per-entry arrays by gamma → T2s → T2f."""
     p = data["params"]
-    idx = np.lexsort((p[:, 0], p[:, 1], p[:, 2]))  # FWHM outermost
+    idx = np.lexsort((p[:, 0], p[:, 1], p[:, 2]))  # gamma outermost
     for key in _ENTRY_KEYS:
         if key in data:
             data[key] = data[key][idx]
@@ -128,6 +134,7 @@ def merge_dictionaries(
         # Metadata attributes from A + merge provenance
         for name, val in a["_attrs"].items():
             f.attrs[name] = val
+        f.attrs["params_columns"] = 'T2f_s, T2s_s, gamma_rad_s (Cauchy scale, FWHM = 2*gamma)'
         f.attrs["merged_from"]  = f"{fname_a} + {fname_b}"
         f.attrs["merged_date"]  = datetime.now().isoformat()
         f.attrs["n_entries_a"]  = nA
@@ -137,19 +144,19 @@ def merge_dictionaries(
     # ── Summary ───────────────────────────────────────────────────────────
     p = merged["params"]
     fsize_mb  = os.path.getsize(fname_out) / 1e6
-    fwhm_vals = np.unique(p[:, 2])
+    gamma_vals = np.unique(p[:, 2])
 
     print(f"\nSaved  {fname_out}  ({fsize_mb:.1f} MB)")
     print(f"  Total entries : {nEntries_m}  "
           f"(A: {nA}  +  B: {nB - n_dup}  −  {n_dup} duplicates)")
-    print(f"  FWHM values   : {'  '.join(f'{v:.0f}' for v in fwhm_vals)} Hz")
+    print(f"  gamma values  : {'  '.join(f'{v:.1f}' for v in gamma_vals)} rad/s")
     print(f"  T2f range     : {p[:,0].min()*1e3:.2f} – {p[:,0].max()*1e3:.2f} ms  (from params[:,0])")
     print(f"  T2s range     : {p[:,1].min()*1e3:.1f} – {p[:,1].max()*1e3:.1f} ms  (from params[:,1])")
 
 
 if __name__ == "__main__":
     merge_dictionaries(
-        fname_a="newDictPy_5090FWHM.h5",
-        fname_b="newDictPy_6080FWHM.h5",
-        fname_out="pyDict_5090FWHM.h5",
+        fname_a="dict_general_gamma2045.h5",
+        fname_b="dict_general_gamma2050.h5",
+        fname_out="dict_final_21102026_gamma2050.h5",
     )
